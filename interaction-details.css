@@ -6,3 +6,6 @@
   translate:var(--hero-mouse-offset,0px 0px);
  }
 }
+
+/* Preserve number typography if a cached page still contains a counter wrapper. */
+.case-facts strong > span,#about .about-since strong > span{font:inherit;letter-spacing:inherit;line-height:inherit;color:inherit;margin:0;display:inline}
