@@ -1,0 +1,47 @@
+name: Import approved portfolio draft
+on:
+  push:
+    paths: ['.github/workflows/import-draft.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Copy approved draft
+        shell: python
+        run: |
+          import io, pathlib, re, tarfile, urllib.request
+          revision = "88fb413e623c28a660421d7bebc2e6af3ae92be2"
+          url = "https://codeload.github.com/kontora03-ship-it/kurbatov-site/tar.gz/" + revision
+          data = urllib.request.urlopen(url, timeout=120).read()
+          with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
+              for member in archive.getmembers():
+                  parts = pathlib.PurePosixPath(member.name).parts[1:]
+                  if not parts or not member.isfile() or any(p.startswith(".") for p in parts):
+                      continue
+                  if parts[-1] in ("CNAME", "robots.txt", "sitemap.xml", "README.md"):
+                      continue
+                  if ".." in parts:
+                      raise ValueError("Unsafe path")
+                  path = pathlib.Path(*parts)
+                  payload = archive.extractfile(member).read()
+                  if path.suffix == ".html":
+                      html = payload.decode("utf-8")
+                      html = re.sub(r'<meta\s+[^>]*name=["\x27]robots["\x27][^>]*>', '', html, flags=re.I)
+                      html = html.replace("</head>", '<meta name="robots" content="noindex, nofollow">\n</head>')
+                      payload = html.encode("utf-8")
+                  path.parent.mkdir(parents=True, exist_ok=True)
+                  path.write_bytes(payload)
+          pathlib.Path(".nojekyll").touch()
+          pathlib.Path("robots.txt").write_text("User-agent: *\nDisallow: /\n")
+      - name: Save preview
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git diff --cached --quiet && exit 0
+          git commit -m "Import draft with counters and hero parallax"
+          git push origin HEAD:main
